@@ -137,7 +137,7 @@
                     <div class="stagger-item bg-white/5 border border-white/10 p-8 rounded-[2.5rem] mb-10" style="animation-delay: 0.2s">
                         <div class="flex gap-4 mb-6">
                             <input id="task-input" type="text" placeholder="DEFINE OBJECTIVE..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-xs font-bold uppercase tracking-widest focus:outline-none">
-                            <button onclick="handleAddTask()" class="bg-white text-black px-8 rounded-xl"><i data-lucide="plus"></i></button>
+                            <button handleAddTask() class="bg-white text-black px-8 rounded-xl"><i data-lucide="plus"></i></button>
                         </div>
                         <div id="subject-selectors" class="flex flex-wrap gap-3"></div>
                     </div>
@@ -261,9 +261,11 @@
 
     <script>
         // --- SPOTIFY CONFIG ---
-        // REPLACE 'YOUR_CLIENT_ID' with the ID from your Spotify Developer Dashboard
+        // 1. Paste your long Client ID between the single quotes below:
         const SPOTIFY_CLIENT_ID = 'bb7dbf7550ff4793930f9f9d93862848'; 
-        const REDIRECT_URI = window.location.href.split('#')[0];
+        
+        // 2. This gets the exact URL you are on right now to send to Spotify
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
         const SCOPES = 'user-read-currently-playing user-read-playback-state';
 
         // --- CONSTANTS & STATE ---
@@ -290,17 +292,31 @@
 
         // --- SPOTIFY INTEGRATION ---
         function loginToSpotify() {
-            const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`;
+            if (SPOTIFY_CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+                alert("Hold on! You need to paste your Client ID from the Spotify Dashboard into the code (line 215) first.");
+                return;
+            }
+            
+            // Generate Spotify Login URL
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`;
             window.location.href = authUrl;
         }
 
         function handleSpotifyAuth() {
+            // Check for access token in the URL after redirect
             const hash = window.location.hash.substring(1);
             const params = new URLSearchParams(hash);
             const token = params.get('access_token');
+            const error = params.get('error');
+
+            if (error) {
+                console.error("Spotify Auth Error:", error);
+            }
+
             if (token) {
                 spotifyToken = token;
-                window.location.hash = ''; // Clean URL
+                // Clear the hash from the URL so it looks clean
+                history.replaceState(null, null, window.location.pathname);
                 startSpotifyPolling();
             }
         }
@@ -313,13 +329,15 @@
                 });
                 
                 if (response.status === 204) {
-                    updateSpotifyUI(null); // No track playing
+                    updateSpotifyUI(null); // Nothing playing
                     return;
                 }
                 
                 if (response.status === 401) {
+                    // Token expired
                     spotifyToken = null;
                     clearInterval(spotifyInterval);
+                    document.getElementById('sync-btn-text').innerText = "Session Expired. Re-login.";
                     return;
                 }
 
@@ -332,7 +350,8 @@
 
         function startSpotifyPolling() {
             fetchCurrentlyPlaying();
-            spotifyInterval = setInterval(fetchCurrentlyPlaying, 5000); // Check every 5s
+            // Poll every 4 seconds for a smooth real-time feel
+            spotifyInterval = setInterval(fetchCurrentlyPlaying, 4000); 
         }
 
         function updateSpotifyUI(data) {
@@ -347,10 +366,10 @@
             const syncIcon = document.getElementById('sync-icon');
 
             if (!data || !data.item) {
-                trackNameEl.innerText = "Nothing Playing";
-                artistNameEl.innerText = "Open Spotify to start sync";
+                trackNameEl.innerText = "Spotify Synced";
+                artistNameEl.innerText = "Play a song on your app";
                 disk.classList.remove('animate-spin-slow');
-                arm.classList.remove('rotate-[32deg]');
+                arm.style.transform = 'rotate(0deg)';
                 statusDot.className = 'w-2 h-2 rounded-full bg-white/20';
                 statusText.innerText = 'Online';
                 return;
@@ -364,7 +383,7 @@
             
             // Album Art
             if (item.album.images.length > 0) {
-                artContainer.innerHTML = `<img src="${item.album.images[0].url}" class="w-full h-full object-cover">`;
+                artContainer.innerHTML = `<img src="${item.album.images[0].url}" class="w-full h-full object-cover rounded-full">`;
             }
 
             // Visual Status
@@ -372,15 +391,15 @@
             statusText.innerText = isPlaying ? 'Playing' : 'Paused';
             statusText.className = 'text-[8px] font-bold uppercase tracking-widest text-green-400';
 
-            syncText.innerText = "Spotify Synced";
+            syncText.innerText = isPlaying ? "Live Sync Active" : "Paused";
             syncIcon.setAttribute('data-lucide', 'check-circle');
 
             if (isPlaying) {
                 disk.classList.add('animate-spin-slow');
-                arm.classList.add('rotate-[32deg]');
+                arm.style.transform = 'rotate(32deg)';
             } else {
                 disk.classList.remove('animate-spin-slow');
-                arm.classList.remove('rotate-[32deg]');
+                arm.style.transform = 'rotate(0deg)';
             }
             lucide.createIcons();
         }
